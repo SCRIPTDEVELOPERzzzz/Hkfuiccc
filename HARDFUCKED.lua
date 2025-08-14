@@ -142,7 +142,8 @@ Toggle.Position = UDim2.new(0, 5, 0, -2)
 Toggle.Rotation = 90
 Toggle.Size = UDim2.new(0, 20, 0, 20)
 Toggle.ZIndex = 2
-Toggle.Image = "https://create.roblox.com/store/asset/80035563083213/likevemonresized420x420"
+Toggle.Image = "https://www.roblox.com/Thumbs/Asset.ashx?width=420&height=420&assetId=80035563083213"
+
 Base.Name = "Base"
 Base.Parent = Bar
 Base.BackgroundColor3 = Color3.new(0.160784, 0.290196, 0.478431)
