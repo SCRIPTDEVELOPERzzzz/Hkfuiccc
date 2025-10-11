@@ -3,7 +3,7 @@ local ui_options = {
     min_size = Vector2.new(400, 300),
     toggle_key = Enum.KeyCode.C,
     can_resize = true,
-    title_font = Enum.Font.Creepster, -- add this
+    title_font = Enum.Font.Bangers, -- add this
 }
 do
 	local imgui = game:GetService("CoreGui"):FindFirstChild("imgui")
