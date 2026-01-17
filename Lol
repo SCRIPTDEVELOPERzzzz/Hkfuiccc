@@ -1,0 +1,842 @@
+-- DragonUI Library - v1.0
+-- Turned original Dragon Hub into a reusable UI library
+-- Created for SCRIPTDEVELOPERzzzz based on original Dragon Hub
+-- Usage documented at the bottom of this file
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+
+local plr = Players.LocalPlayer
+
+local DragonUI = {}
+DragonUI.__index = DragonUI
+
+-- Default theme and sizes
+local DEFAULTS = {
+    Theme = {
+        Primary = Color3.fromRGB(20, 20, 20),
+        Secondary = Color3.fromRGB(40, 40, 40),
+        Accent = Color3.fromRGB(80, 80, 80),
+        Background = Color3.fromRGB(255, 255, 255),
+        Text = Color3.fromRGB(20, 20, 20),
+        TextDim = Color3.fromRGB(120, 120, 120),
+        Success = Color3.fromRGB(40, 200, 100),
+        Error = Color3.fromRGB(220, 60, 60),
+        ToggleOn = Color3.fromRGB(30, 30, 30),
+        ToggleOff = Color3.fromRGB(200, 200, 200)
+    },
+    Title = "DragonUI",
+    MinSize = Vector2.new(250, 70),
+    Size = Vector2.new(550, 340),
+    TabWidth = 130,
+    ToggleIcon = "rbxassetid://83280891382176",
+    WindowIcon = "rbxassetid://83280891382176",
+    Parent = game.CoreGui
+}
+
+-- Utility functions
+local function tween(obj, props, duration, style, dir)
+    TweenService:Create(obj, TweenInfo.new(duration or 0.25, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
+end
+
+local function createCorner(parent, radius)
+    local c = Instance.new("UICorner", parent)
+    c.CornerRadius = UDim.new(0, radius or 8)
+    return c
+end
+
+local function createStroke(parent, color, thickness, transparency)
+    local s = Instance.new("UIStroke", parent)
+    s.Color = color or Color3.new(0,0,0)
+    s.Thickness = thickness or 1
+    s.Transparency = transparency or 0
+    return s
+end
+
+-- Constructor
+function DragonUI.new(options)
+    options = options or {}
+    local self = setmetatable({}, DragonUI)
+    self.theme = options.Theme or DEFAULTS.Theme
+    self.title = options.Title or DEFAULTS.Title
+    self.minSize = options.MinSize or DEFAULTS.MinSize
+    self.size = options.Size or DEFAULTS.Size
+    self.tabWidth = options.TabWidth or DEFAULTS.TabWidth
+    self.toggleIcon = options.ToggleIcon or DEFAULTS.ToggleIcon
+    self.windowIcon = options.WindowIcon or DEFAULTS.WindowIcon
+    self.parent = options.Parent or DEFAULTS.Parent
+
+    -- internal storage
+    self.tabs = {}
+    self.connections = {}
+    self.gui = Instance.new("ScreenGui")
+    self.gui.Name = "DragonUI_" .. tostring(math.random(1000,9999))
+    self.gui.ResetOnSpawn = false
+    self.gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    self.gui.Parent = self.parent
+
+    -- Build base UI
+    self:_buildBase()
+    return self
+end
+
+-- Base UI builder
+function DragonUI:_buildBase()
+    local theme = self.theme
+
+    -- Icon / toggle button
+    local iconContainer = Instance.new("Frame", self.gui)
+    iconContainer.Name = "IconContainer"
+    iconContainer.Size = UDim2.new(0, 60, 0, 60)
+    iconContainer.Position = UDim2.new(0, 25, 0, 25)
+    iconContainer.BackgroundTransparency = 1
+    iconContainer.Active = true
+    iconContainer.Draggable = true
+
+    local iconBtn = Instance.new("ImageButton", iconContainer)
+    iconBtn.Name = "ToggleBtn"
+    iconBtn.Size = UDim2.new(1,0,1,0)
+    iconBtn.BackgroundColor3 = theme.Background
+    iconBtn.BorderSizePixel = 0
+    iconBtn.AutoButtonColor = false
+    iconBtn.Image = self.toggleIcon
+    iconBtn.ImageColor3 = theme.Primary
+    iconBtn.ScaleType = Enum.ScaleType.Fit
+    iconBtn.ZIndex = 3
+    iconBtn.ImageTransparency = 0
+    createCorner(iconBtn, 16)
+    createStroke(iconBtn, theme.Primary, 2, 0)
+
+    self.iconBtn = iconBtn
+
+    -- Main window
+    local mainFrame = Instance.new("Frame", self.gui)
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, self.size.X, 0, self.size.Y)
+    mainFrame.Position = UDim2.new(0.5, -self.size.X/2, 0.5, -self.size.Y/2)
+    mainFrame.BackgroundColor3 = self.theme.Background
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.ZIndex = 10
+    createCorner(mainFrame, 12)
+    createStroke(mainFrame, self.theme.Primary, 2, 0)
+    mainFrame.Visible = false
+    self.mainFrame = mainFrame
+
+    -- Header
+    local header = Instance.new("Frame", mainFrame)
+    header.Name = "Header"
+    header.Size = UDim2.new(1,0,0,60)
+    header.BackgroundColor3 = self.theme.Primary
+    header.BorderSizePixel = 0
+    createCorner(header, 12)
+    header.ZIndex = 11
+
+    -- Header icon
+    local headerIcon = Instance.new("ImageLabel", header)
+    headerIcon.Size = UDim2.new(0, 36, 0, 36)
+    headerIcon.Position = UDim2.new(0, 14, 0.5, -18)
+    headerIcon.Image = self.windowIcon
+    headerIcon.BackgroundTransparency = 1
+    headerIcon.ImageColor3 = self.theme.Background
+    headerIcon.ZIndex = 12
+
+    -- Title
+    local titleLabel = Instance.new("TextLabel", header)
+    titleLabel.Size = UDim2.new(0, 240, 0, 32)
+    titleLabel.Position = UDim2.new(0, 58, 0, 14)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = self.title
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 18
+    titleLabel.TextColor3 = self.theme.Background
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.ZIndex = 12
+
+    -- Close button
+    local closeBtn = Instance.new("TextButton", header)
+    closeBtn.Size = UDim2.new(0, 34, 0, 34)
+    closeBtn.Position = UDim2.new(1, -48, 0.5, -17)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.BorderSizePixel = 0
+    closeBtn.AutoButtonColor = false
+    createCorner(closeBtn, 8)
+    closeBtn.ZIndex = 12
+
+    closeBtn.MouseEnter:Connect(function() tween(closeBtn, {BackgroundColor3 = self.theme.Error}, 0.15) end)
+    closeBtn.MouseLeave:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(50,50,50)}, 0.15) end)
+    closeBtn.MouseButton1Click:Connect(function()
+        self:Destroy()
+    end)
+
+    -- Sidebar (tabs)
+    local sidebar = Instance.new("Frame", mainFrame)
+    sidebar.Name = "Sidebar"
+    sidebar.Size = UDim2.new(0, self.tabWidth, 0, self.size.Y - 90)
+    sidebar.Position = UDim2.new(0, 10, 0, 65)
+    sidebar.BackgroundColor3 = Color3.fromRGB(245,245,245)
+    sidebar.BorderSizePixel = 0
+    createCorner(sidebar, 10)
+    createStroke(sidebar, Color3.fromRGB(220,220,220), 1, 0)
+    sidebar.ZIndex = 11
+    self.sidebar = sidebar
+
+    -- Player card & tab container
+    local tabList = Instance.new("Frame", sidebar)
+    tabList.Name = "TabList"
+    tabList.Size = UDim2.new(1, -16, 1, -24)
+    tabList.Position = UDim2.new(0, 8, 0, 8)
+    tabList.BackgroundTransparency = 1
+    tabList.ZIndex = 12
+
+    -- Content frame
+    local contentFrame = Instance.new("Frame", mainFrame)
+    contentFrame.Name = "ContentFrame"
+    contentFrame.Size = UDim2.new(1, -(self.tabWidth + 38), 1, -90)
+    contentFrame.Position = UDim2.new(0, self.tabWidth + 18, 0, 65)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.ZIndex = 11
+    self.contentFrame = contentFrame
+
+    -- store references
+    self.header = header
+    self.tabList = tabList
+    self.titleLabel = titleLabel
+
+    -- Toggle the mainFrame
+    iconBtn.MouseButton1Click:Connect(function()
+        if mainFrame.Visible then
+            tween(mainFrame, {Size = UDim2.new(0, 0, 0, 0), Position = UDim2.new(0.5, 0, 0.5, 0)}, 0.35)
+            task.wait(0.35)
+            mainFrame.Visible = false
+            mainFrame.Size = UDim2.new(0, self.size.X, 0, self.size.Y)
+            mainFrame.Position = UDim2.new(0.5, -self.size.X/2, 0.5, -self.size.Y/2)
+        else
+            mainFrame.Size = UDim2.new(0, 0, 0, 0)
+            mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+            mainFrame.Visible = true
+            tween(mainFrame, {Size = UDim2.new(0, self.size.X, 0, self.size.Y), Position = UDim2.new(0.5, -self.size.X/2, 0.5, -self.size.Y/2)}, 0.45, Enum.EasingStyle.Back)
+        end
+    end)
+end
+
+-- Helper to create a new tab (returns tab object)
+function DragonUI:AddTab(name, icon)
+    local index = #self.tabs + 1
+    -- create tab button
+    local btn = Instance.new("TextButton", self.tabList)
+    btn.Name = name .. "_TabBtn"
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.Position = UDim2.new(0, 0, 0, (index - 1) * 32)
+    btn.BackgroundTransparency = 1
+    btn.Text = ""
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    createCorner(btn, 8)
+
+    local iconLabel = Instance.new("ImageLabel", btn)
+    iconLabel.Size = UDim2.new(0, 18, 0, 18)
+    iconLabel.Position = UDim2.new(0, 8, 0.5, -9)
+    iconLabel.BackgroundTransparency = 1
+    iconLabel.Image = icon or self.windowIcon
+    iconLabel.ImageColor3 = self.theme.TextDim
+
+    local label = Instance.new("TextLabel", btn)
+    label.Size = UDim2.new(1, -36, 1, 0)
+    label.Position = UDim2.new(0, 32, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = self.theme.TextDim
+    label.Font = Enum.Font.GothamSemibold
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local indicator = Instance.new("Frame", btn)
+    indicator.Size = UDim2.new(0, 3, 0, 0)
+    indicator.Position = UDim2.new(0, 0, 0.5, 0)
+    indicator.AnchorPoint = Vector2.new(0, 0.5)
+    indicator.BackgroundColor3 = self.theme.Primary
+    indicator.BorderSizePixel = 0
+    createCorner(indicator, 2)
+
+    -- content scrolling frame
+    local content = Instance.new("ScrollingFrame", self.contentFrame)
+    content.Name = name .. "Content"
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 6
+    content.CanvasSize = UDim2.new(0, 0, 0, 600)
+    content.Visible = (index == 1) -- show first tab by default
+    content.ZIndex = 11
+
+    -- selection behavior
+    btn.MouseButton1Click:Connect(function()
+        for _, t in ipairs(self.tabs) do
+            t.button.BackgroundTransparency = 1
+            t.icon.ImageColor3 = self.theme.TextDim
+            t.label.TextColor3 = self.theme.TextDim
+            tween(t.indicator, {Size = UDim2.new(0, 3, 0, 0)}, 0.15)
+            t.content.Visible = false
+        end
+        tween(indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.2, Enum.EasingStyle.Back)
+        tween(iconLabel, {ImageColor3 = self.theme.Primary}, 0.2)
+        tween(label, {TextColor3 = self.theme.Primary}, 0.2)
+        btn.BackgroundTransparency = 0
+        content.Visible = true
+    end)
+
+    local tabObj = {
+        name = name,
+        button = btn,
+        icon = iconLabel,
+        label = label,
+        indicator = indicator,
+        content = content,
+        parent = self
+    }
+
+    table.insert(self.tabs, tabObj)
+    -- if first tab, initialize selected style
+    if #self.tabs == 1 then
+        tween(indicator, {Size = UDim2.new(0,3,0,18)}, 0)
+        iconLabel.ImageColor3 = self.theme.Primary
+        label.TextColor3 = self.theme.Primary
+    end
+
+    -- expose API to add components to the tab
+    function tabObj:AddSeparator(posY)
+        posY = posY or (#self.content:GetChildren() * 40)
+        local sep = Instance.new("Frame", self.content)
+        sep.Size = UDim2.new(1, -24, 0, 8)
+        sep.Position = UDim2.new(0, 12, 0, posY)
+        sep.BackgroundColor3 = Color3.fromRGB(230,230,230)
+        createCorner(sep, 4)
+        return sep
+    end
+
+    function tabObj:AddButton(text, posY, primary, callback)
+        posY = posY or (#self.content:GetChildren() * 44)
+        local btn = Instance.new("TextButton", self.content)
+        btn.Size = UDim2.new(1, -24, 0, 36)
+        btn.Position = UDim2.new(0, 12, 0, posY)
+        btn.BackgroundColor3 = primary and self.parent.theme.Primary or Color3.fromRGB(245,245,245)
+        btn.Text = text
+        btn.TextColor3 = primary and self.parent.theme.Background or self.parent.theme.Text
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 13
+        btn.BorderSizePixel = 0
+        btn.AutoButtonColor = false
+        createCorner(btn, 8)
+        if not primary then createStroke(btn, Color3.fromRGB(230,230,230), 1, 0) end
+        btn.MouseButton1Click:Connect(function()
+            tween(btn, {Size = UDim2.new(1, -28, 0, 34)}, 0.08)
+            task.wait(0.08)
+            tween(btn, {Size = UDim2.new(1, -24, 0, 36)}, 0.08)
+            if callback then pcall(callback) end
+        end)
+        return btn
+    end
+
+    function tabObj:AddToggle(text, key, posY, default, callback)
+        posY = posY or (#self.content:GetChildren() * 44)
+        local container = Instance.new("Frame", self.content)
+        container.Size = UDim2.new(1, -24, 0, 42)
+        container.Position = UDim2.new(0, 12, 0, posY)
+        container.BackgroundColor3 = Color3.fromRGB(245,245,245)
+        container.BorderSizePixel = 0
+        createCorner(container, 8)
+        createStroke(container, Color3.fromRGB(230,230,230), 1, 0)
+
+        local label = Instance.new("TextLabel", container)
+        label.Size = UDim2.new(1, -80, 1, 0)
+        label.Position = UDim2.new(0, 12, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = self.parent.theme.Text
+        label.Font = Enum.Font.GothamMedium
+        label.TextSize = 13
+        label.TextXAlignment = Enum.TextXAlignment.Left
+
+        local toggleBg = Instance.new("TextButton", container)
+        toggleBg.Size = UDim2.new(0, 50, 0, 26)
+        toggleBg.Position = UDim2.new(1, -62, 0.5, -13)
+        toggleBg.BackgroundColor3 = default and self.parent.theme.ToggleOn or self.parent.theme.ToggleOff
+        toggleBg.Text = ""
+        toggleBg.BorderSizePixel = 0
+        toggleBg.AutoButtonColor = false
+        createCorner(toggleBg, 13)
+
+        local toggleKnob = Instance.new("Frame", toggleBg)
+        toggleKnob.Size = UDim2.new(0, 20, 0, 20)
+        toggleKnob.Position = default and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
+        toggleKnob.BackgroundColor3 = self.parent.theme.Background
+        toggleKnob.BorderSizePixel = 0
+        createCorner(toggleKnob, 10)
+
+        local state = default and true or false
+        toggleBg.MouseButton1Click:Connect(function()
+            state = not state
+            tween(toggleKnob, {Position = state and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)}, 0.2, Enum.EasingStyle.Back)
+            tween(toggleBg, {BackgroundColor3 = state and self.parent.theme.ToggleOn or self.parent.theme.ToggleOff}, 0.2)
+            if callback then pcall(callback, state) end
+        end)
+
+        return {
+            Set = function(v) state = v; toggleKnob.Position = state and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10); toggleBg.BackgroundColor3 = state and self.parent.theme.ToggleOn or self.parent.theme.ToggleOff end,
+            Get = function() return state end,
+            Container = container
+        }
+    end
+
+    function tabObj:AddSlider(text, key, min, max, posY, default, callback)
+        posY = posY or (#self.content:GetChildren() * 70)
+        min = min or 0
+        max = max or 100
+        default = default or min
+        local container = Instance.new("Frame", self.content)
+        container.Size = UDim2.new(1, -24, 0, 60)
+        container.Position = UDim2.new(0, 12, 0, posY)
+        container.BackgroundColor3 = Color3.fromRGB(245,245,245)
+        container.BorderSizePixel = 0
+        createCorner(container, 8)
+        createStroke(container, Color3.fromRGB(230,230,230), 1, 0)
+
+        local label = Instance.new("TextLabel", container)
+        label.Size = UDim2.new(1, -16, 0, 22)
+        label.Position = UDim2.new(0, 12, 0, 6)
+        label.BackgroundTransparency = 1
+        label.Text = text .. ": " .. default
+        label.TextColor3 = self.parent.theme.Text
+        label.Font = Enum.Font.GothamMedium
+        label.TextSize = 13
+        label.TextXAlignment = Enum.TextXAlignment.Left
+
+        local sliderBg = Instance.new("Frame", container)
+        sliderBg.Size = UDim2.new(1, -24, 0, 8)
+        sliderBg.Position = UDim2.new(0, 12, 0, 40)
+        sliderBg.BackgroundColor3 = Color3.fromRGB(220,220,220)
+        sliderBg.BorderSizePixel = 0
+        createCorner(sliderBg, 4)
+
+        local percentage = (default - min) / (max - min)
+        local sliderFill = Instance.new("Frame", sliderBg)
+        sliderFill.Size = UDim2.new(percentage, 0, 1, 0)
+        sliderFill.BackgroundColor3 = self.parent.theme.Primary
+        sliderFill.BorderSizePixel = 0
+        createCorner(sliderFill, 4)
+
+        local knob = Instance.new("Frame", sliderBg)
+        knob.Size = UDim2.new(0, 18, 0, 18)
+        knob.Position = UDim2.new(percentage, -9, 0.5, -9)
+        knob.BackgroundColor3 = self.parent.theme.Background
+        knob.BorderSizePixel = 0
+        createCorner(knob, 9)
+        createStroke(knob, self.parent.theme.Primary, 2, 0)
+
+        local dragging = false
+
+        local function update(input)
+            local pos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+            local value = math.floor(min + (max - min) * pos)
+            label.Text = text .. ": " .. value
+            sliderFill.Size = UDim2.new(pos, 0, 1, 0)
+            knob.Position = UDim2.new(pos, -9, 0.5, -9)
+            if callback then pcall(callback, value) end
+        end
+
+        knob.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+            end
+        end)
+        knob.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+        sliderBg.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                update(input)
+            end
+        end)
+        sliderBg.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                update(input)
+            end
+        end)
+
+        return {
+            Set = function(val) local p = math.clamp((val - min)/(max-min), 0, 1); sliderFill.Size = UDim2.new(p,0,1,0); knob.Position = UDim2.new(p,-9,0.5,-9); label.Text = text..": "..math.floor(val) end,
+            Get = function() return tonumber(label.Text:match("%d+")) end,
+            Container = container
+        }
+    end
+
+    function tabObj:AddDropdown(text, items, posY, defaultIndex, callback)
+        posY = posY or (#self.content:GetChildren() * 44)
+        items = items or {}
+        defaultIndex = defaultIndex or 1
+        local container = Instance.new("Frame", self.content)
+        container.Size = UDim2.new(1, -24, 0, 42)
+        container.Position = UDim2.new(0, 12, 0, posY)
+        container.BackgroundColor3 = Color3.fromRGB(245,245,245)
+        container.BorderSizePixel = 0
+        createCorner(container, 8)
+        createStroke(container, Color3.fromRGB(230,230,230), 1, 0)
+
+        local label = Instance.new("TextLabel", container)
+        label.Size = UDim2.new(0.5, -12, 1, 0)
+        label.Position = UDim2.new(0, 12, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = self.parent.theme.Text
+        label.Font = Enum.Font.GothamMedium
+        label.TextSize = 13
+        label.TextXAlignment = Enum.TextXAlignment.Left
+
+        local selectBtn = Instance.new("TextButton", container)
+        selectBtn.Size = UDim2.new(0.5, -24, 1, 0)
+        selectBtn.Position = UDim2.new(1, -selectBtn.Size.X.Offset - 12, 0, 0)
+        selectBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
+        selectBtn.Text = items[defaultIndex] or "Select"
+        selectBtn.TextColor3 = self.parent.theme.Text
+        selectBtn.Font = Enum.Font.Gotham
+        selectBtn.TextSize = 12
+        selectBtn.BorderSizePixel = 0
+        selectBtn.AutoButtonColor = false
+        createCorner(selectBtn, 8)
+
+        local list = Instance.new("Frame", container)
+        list.Size = UDim2.new(0.98, 0, 0, math.min(6, #items) * 28)
+        list.Position = UDim2.new(0.01, 0, 1, 6)
+        list.BackgroundColor3 = Color3.fromRGB(255,255,255)
+        list.BorderSizePixel = 0
+        createCorner(list, 8)
+        list.Visible = false
+        list.ClipsDescendants = true
+
+        local uiList = Instance.new("UIListLayout", list)
+        uiList.SortOrder = Enum.SortOrder.LayoutOrder
+        uiList.Padding = UDim.new(0, 4)
+
+        for i, v in ipairs(items) do
+            local opt = Instance.new("TextButton", list)
+            opt.Size = UDim2.new(1, -8, 0, 24)
+            opt.Position = UDim2.new(0, 4, 0, (i-1) * 28)
+            opt.BackgroundTransparency = 1
+            opt.Text = v
+            opt.TextColor3 = self.parent.theme.Text
+            opt.Font = Enum.Font.Gotham
+            opt.TextSize = 12
+            opt.AutoButtonColor = false
+            opt.MouseButton1Click:Connect(function()
+                selectBtn.Text = v
+                list.Visible = false
+                if callback then pcall(callback, v, i) end
+            end)
+        end
+
+        selectBtn.MouseButton1Click:Connect(function()
+            list.Visible = not list.Visible
+        end)
+
+        return {
+            SetItems = function(newItems)
+                for _, child in ipairs(list:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+                for i, v in ipairs(newItems) do
+                    local opt = Instance.new("TextButton", list)
+                    opt.Size = UDim2.new(1, -8, 0, 24)
+                    opt.Position = UDim2.new(0, 4, 0, (i-1) * 28)
+                    opt.BackgroundTransparency = 1
+                    opt.Text = v
+                    opt.TextColor3 = self.parent.theme.Text
+                    opt.Font = Enum.Font.Gotham
+                    opt.TextSize = 12
+                    opt.AutoButtonColor = false
+                    opt.MouseButton1Click:Connect(function()
+                        selectBtn.Text = v
+                        list.Visible = false
+                        if callback then pcall(callback, v, i) end
+                    end)
+                end
+                list.Size = UDim2.new(0.98, 0, 0, math.min(6, #newItems) * 28)
+            end,
+            Get = function() return selectBtn.Text end,
+            Container = container
+        }
+    end
+
+    function tabObj:AddStatusBox(labelText, posY, width, height)
+        posY = posY or (#self.content:GetChildren() * 120)
+        width = width or 320
+        height = height or 120
+
+        local container = Instance.new("Frame", self.content)
+        container.Size = UDim2.new(0, width, 0, height)
+        container.Position = UDim2.new(0, 12, 0, posY)
+        container.BackgroundColor3 = Color3.fromRGB(245,245,245)
+        createCorner(container, 8)
+        createStroke(container, Color3.fromRGB(230,230,230), 1, 0)
+        container.ClipsDescendants = true
+
+        local label = Instance.new("TextLabel", container)
+        label.Size = UDim2.new(1, -12, 0, 18)
+        label.Position = UDim2.new(0, 6, 0, 6)
+        label.BackgroundTransparency = 1
+        label.Text = labelText or "Status"
+        label.TextColor3 = self.parent.theme.Text
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 12
+        label.TextXAlignment = Enum.TextXAlignment.Left
+
+        local scroll = Instance.new("ScrollingFrame", container)
+        scroll.Name = "StatusScroll"
+        scroll.Size = UDim2.new(1, -12, 1, -36)
+        scroll.Position = UDim2.new(0, 6, 0, 30)
+        scroll.CanvasSize = UDim2.new(2, 0, 2, 0) -- allow both directions initially; library will auto size to content
+        scroll.ScrollBarThickness = 8
+        scroll.BackgroundTransparency = 1
+        scroll.VerticalScrollBarInset = Enum.ScrollBarInset.None
+        scroll.ClipsDescendants = true
+
+        -- Use a TextLabel inside the scrolling frame as a content holder
+        local textLabel = Instance.new("TextLabel", scroll)
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.Position = UDim2.new(0, 0, 0, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = ""
+        textLabel.TextColor3 = self.parent.theme.Text
+        textLabel.Font = Enum.Font.Gotham
+        textLabel.TextSize = 14
+        textLabel.TextWrapped = true
+        textLabel.TextXAlignment = Enum.TextXAlignment.Left
+        textLabel.TextYAlignment = Enum.TextYAlignment.Top
+        textLabel.RichText = false
+
+        -- A function to update canvas size based on text content
+        local function updateCanvas()
+            -- approximate width & height using TextService could be done, but simple approach:
+            -- expand CanvasSize gradually to allow both axes:
+            local lines = tostring(textLabel.Text):gsub("\t", "    "):split("\n")
+            local widest = 0
+            for _, line in ipairs(lines) do
+                if #line > widest then widest = #line end
+            end
+            -- approximate width per character
+            local charWidth = 7 -- approximation; fine for most fonts
+            local approximatedWidth = math.clamp(widest * charWidth, 0, width * 3)
+            local approximatedHeight = math.max(#lines * 18, height)
+            scroll.CanvasSize = UDim2.new(0, approximatedWidth + 20, 0, approximatedHeight + 20)
+            textLabel.Size = UDim2.new(0, approximatedWidth, 0, approximatedHeight)
+        end
+
+        local function setText(txt)
+            textLabel.Text = tostring(txt)
+            updateCanvas()
+            -- scroll to bottom-right
+            task.delay(0.01, function()
+                pcall(function()
+                    scroll.CanvasPosition = Vector2.new(math.max(0, scroll.CanvasSize.X.Offset - scroll.AbsoluteSize.X), math.max(0, scroll.CanvasSize.Y.Offset - scroll.AbsoluteSize.Y))
+                end)
+            end)
+        end
+
+        local function appendText(txt)
+            textLabel.Text = textLabel.Text .. tostring(txt)
+            updateCanvas()
+            task.delay(0.01, function()
+                pcall(function()
+                    scroll.CanvasPosition = Vector2.new(math.max(0, scroll.CanvasSize.X.Offset - scroll.AbsoluteSize.X), math.max(0, scroll.CanvasSize.Y.Offset - scroll.AbsoluteSize.Y))
+                end)
+            end)
+        end
+
+        local function clearText()
+            textLabel.Text = ""
+            updateCanvas()
+        end
+
+        -- expose API
+        return {
+            Container = container,
+            SetText = setText,
+            Append = appendText,
+            Clear = clearText,
+            ScrollFrame = scroll
+        }
+    end
+
+    function tabObj:AddTextbox(labelText, posY, placeholder, defaultText, callback)
+        posY = posY or (#self.content:GetChildren() * 60)
+        local container = Instance.new("Frame", self.content)
+        container.Size = UDim2.new(1, -24, 0, 44)
+        container.Position = UDim2.new(0, 12, 0, posY)
+        container.BackgroundColor3 = Color3.fromRGB(245,245,245)
+        container.BorderSizePixel = 0
+        createCorner(container, 8)
+        createStroke(container, Color3.fromRGB(230,230,230), 1, 0)
+
+        local label = Instance.new("TextLabel", container)
+        label.Size = UDim2.new(0.4, -8, 1, 0)
+        label.Position = UDim2.new(0, 8, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = labelText or "Input"
+        label.TextColor3 = self.parent.theme.Text
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 12
+        label.TextXAlignment = Enum.TextXAlignment.Left
+
+        local box = Instance.new("TextBox", container)
+        box.Size = UDim2.new(0.6, -16, 1, -12)
+        box.Position = UDim2.new(0.4, 8, 0, 6)
+        box.BackgroundColor3 = Color3.fromRGB(255,255,255)
+        box.PlaceholderText = placeholder or ""
+        box.Text = defaultText or ""
+        box.ClearTextOnFocus = false
+        box.Font = Enum.Font.Gotham
+        box.TextSize = 14
+        box.TextColor3 = self.parent.theme.Text
+        box.BorderSizePixel = 0
+        createCorner(box, 6)
+
+        box.FocusLost:Connect(function(enter)
+            if callback then pcall(callback, box.Text, enter) end
+        end)
+
+        return box
+    end
+
+    return tabObj
+end
+
+-- Customization methods
+function DragonUI:SetTheme(tbl)
+    if not tbl then return end
+    for k,v in pairs(tbl) do
+        if self.theme[k] ~= nil then
+            self.theme[k] = v
+        end
+    end
+    -- Not dynamically repainting every existing element for brevity.
+    -- New tabs/widgets will use the updated theme.
+end
+
+function DragonUI:SetMinSize(x,y)
+    self.minSize = Vector2.new(x,y)
+end
+
+function DragonUI:SetTabWidth(width)
+    self.tabWidth = width
+    if self.sidebar and self.mainFrame then
+        self.sidebar.Size = UDim2.new(0, width, 0, self.mainFrame.Size.Y.Offset - 90)
+        self.contentFrame.Size = UDim2.new(1, -(width + 38), 1, -90)
+        -- reposition tabs if needed
+    end
+end
+
+function DragonUI:SetToggleImage(imageId)
+    if imageId then
+        self.toggleIcon = imageId
+        if self.iconBtn then self.iconBtn.Image = imageId end
+    end
+end
+
+function DragonUI:SetWindowImage(imageId)
+    if imageId and self.header then
+        for _, child in ipairs(self.header:GetChildren()) do
+            if child:IsA("ImageLabel") then
+                child.Image = imageId
+                break
+            end
+        end
+    end
+end
+
+function DragonUI:Destroy()
+    if self.gui and self.gui.Parent then
+        self.gui:Destroy()
+    end
+    -- cleanup connections if added in future
+end
+
+-- Example usage (uncomment and edit as needed)
+--[[
+local ui = DragonUI.new({
+    Title = "Dragon Hub - Library",
+    Theme = {
+        Primary = Color3.fromRGB(250, 0, 0), -- example custom theme color
+        Background = Color3.fromRGB(255,255,255),
+        Text = Color3.fromRGB(20,20,20),
+        TextDim = Color3.fromRGB(150,150,150),
+        ToggleOn = Color3.fromRGB(25,25,25),
+        ToggleOff = Color3.fromRGB(220,220,220)
+    },
+    MinSize = Vector2.new(250, 70),
+    Size = Vector2.new(700, 420),
+    TabWidth = 150,
+    ToggleIcon = "rbxassetid://83280891382176",
+    WindowIcon = "rbxassetid://83280891382176",
+    Parent = game.CoreGui
+})
+
+local homeTab = ui:AddTab("Home", "rbxassetid://7733960981")
+local movTab = ui:AddTab("Movement", "rbxassetid://83519504381634")
+
+-- Add a button
+homeTab:AddButton("Visit Website", 10, true, function()
+    setclipboard("https://pelimen.com")
+    pcall(function() StarterGui:SetCore("SendNotification", {Title="DragonUI", Text="Link copied to clipboard"}) end)
+end)
+
+-- Add a toggle
+local t = movTab:AddToggle("Super Jump", "SuperJump", 10, false, function(state)
+    print("SuperJump:", state)
+end)
+
+-- Add a slider
+local s = movTab:AddSlider("Walk Speed", "walk", 16, 200, 60, 50, function(v) print("Speed:", v) end)
+
+-- Add dropdown
+local dd = homeTab:AddDropdown("Quality", {"Low","Medium","High"}, 120, 2, function(v) print("Quality set to", v) end)
+
+-- Add status box and update it
+local status = homeTab:AddStatusBox("Status", 170, 8, 380, 140)
+status:SetText("DragonUI loaded...\n")
+status:Append("Ready.\n")
+task.spawn(function()
+    local i = 1
+    while wait(1) do
+        status:Append("Tick " .. tostring(i) .. "\n")
+        i = i + 1
+    end
+end)
+
+-- Add a textbox
+local input = homeTab:AddTextbox("Say", 250, "Type here...", "", function(text, enter)
+    print("Textbox input:", text, "Enter pressed:", enter)
+end)
+
+-- Change theme later
+-- ui:SetTheme({Primary = Color3.fromRGB(0, 150, 255)})
+-- Set tab width
+-- ui:SetTabWidth(180)
+-- Set toggle image
+-- ui:SetToggleImage("rbxassetid://NEWIDHERE")
+]]
+
+return DragonUI
