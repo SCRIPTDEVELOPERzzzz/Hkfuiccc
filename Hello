@@ -1,0 +1,353 @@
+-- ChilliUI.lua
+-- ModuleScript (place in ReplicatedStorage)
+-- Simple UI library inspired by the provided screenshot: window, toggle, textbox, dropdown
+
+local TweenService = game:GetService("TweenService")
+
+local ChilliUI = {}
+ChilliUI.__index = ChilliUI
+
+-- Styling
+local STYLE = {
+    WindowSize = UDim2.new(0, 640, 0, 420),
+    WindowPadding = 14,
+    SidebarWidth = 120,
+    BgColor = Color3.fromRGB(17, 24, 32),    -- dark background
+    PanelColor = Color3.fromRGB(14, 19, 23), -- slightly different panel
+    Accent = Color3.fromRGB(24, 169, 196),   -- teal highlight
+    StrokeColor = Color3.fromRGB(27, 107, 121),
+    TextColor = Color3.fromRGB(220, 228, 232),
+    SubTextColor = Color3.fromRGB(160, 174, 182),
+}
+
+-- helpers
+local function new(class, props)
+    local obj = Instance.new(class)
+    if props then
+        for k, v in pairs(props) do
+            if k == "Parent" then
+                obj.Parent = v
+            else
+                obj[k] = v
+            end
+        end
+    end
+    return obj
+end
+
+local function makeStroke(instance, color, thickness)
+    local s = new("UIStroke", {Parent = instance, Color = color or STYLE.StrokeColor, Thickness = thickness or 2})
+    return s
+end
+
+local function addCorner(inst, radius)
+    new("UICorner", {Parent = inst, CornerRadius = radius or UDim.new(0, 10)})
+end
+
+-- Create main window
+function ChilliUI.CreateWindow(opts)
+    opts = opts or {}
+    local Title = opts.Title or "Chilli UI"
+    local parent = opts.Parent or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+    local screenGui = new("ScreenGui", {Name = Title:gsub("%s+", "") .. "_GUI", Parent = parent, ResetOnSpawn = false})
+
+    -- Main container
+    local main = new("Frame", {
+        Parent = screenGui,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Size = STYLE.WindowSize,
+        BackgroundColor3 = STYLE.BgColor,
+        BorderSizePixel = 0,
+    })
+    addCorner(main, UDim.new(0, 18))
+    makeStroke(main, STYLE.StrokeColor, 2)
+
+    -- Left sidebar
+    local sidebar = new("Frame", {
+        Parent = main,
+        Size = UDim2.new(0, STYLE.SidebarWidth, 1, -STYLE.WindowPadding*2),
+        Position = UDim2.new(0, STYLE.WindowPadding, 0, STYLE.WindowPadding),
+        BackgroundColor3 = STYLE.PanelColor,
+        BorderSizePixel = 0,
+    })
+    addCorner(sidebar, UDim.new(0, 12))
+    makeStroke(sidebar, STYLE.StrokeColor, 1)
+
+    -- Title on top
+    local titleBar = new("TextLabel", {
+        Parent = main,
+        Size = UDim2.new(1, -STYLE.SidebarWidth - STYLE.WindowPadding*2, 0, 44),
+        Position = UDim2.new(0, STYLE.SidebarWidth + STYLE.WindowPadding*2, 0, STYLE.WindowPadding),
+        BackgroundTransparency = 1,
+        Text = "",
+    })
+
+    local titleText = new("TextLabel", {
+        Parent = main,
+        Size = UDim2.new(0.6, 0, 0, 28),
+        Position = UDim2.new(0, STYLE.SidebarWidth + STYLE.WindowPadding*2 + 8, 0, STYLE.WindowPadding + 8),
+        BackgroundTransparency = 1,
+        Text = Title,
+        TextColor3 = STYLE.Accent,
+        Font = Enum.Font.GothamBold,
+        TextSize = 18,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Content area
+    local content = new("Frame", {
+        Parent = main,
+        Size = UDim2.new(1, -STYLE.SidebarWidth - STYLE.WindowPadding*3, 1, -STYLE.WindowPadding*3 - 44),
+        Position = UDim2.new(0, STYLE.SidebarWidth + STYLE.WindowPadding*2, 0, STYLE.WindowPadding + 44 + 8),
+        BackgroundColor3 = STYLE.PanelColor,
+        BorderSizePixel = 0,
+    })
+    addCorner(content, UDim.new(0, 12))
+    makeStroke(content, STYLE.StrokeColor, 1)
+
+    local contentLayout = new("UIListLayout", {Parent = content, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12)})
+    contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    contentLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+    -- left sidebar list
+    local sidebarLayout = new("UIListLayout", {Parent = sidebar, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8)})
+    sidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    sidebarLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+    -- expose api
+    local self = setmetatable({}, ChilliUI)
+    self.ScreenGui = screenGui
+    self.Main = main
+    self.Sidebar = sidebar
+    self.Content = content
+    self.ContentLayout = contentLayout
+    self.SidebarLayout = sidebarLayout
+
+    -- helper to create sections inside content
+    function self:AddSection(title)
+        local section = new("Frame", {
+            Parent = content,
+            Size = UDim2.new(1, -20, 0, 72),
+            BackgroundColor3 = STYLE.PanelColor,
+            BorderSizePixel = 0,
+        })
+        addCorner(section, UDim.new(0, 10))
+        makeStroke(section, STYLE.StrokeColor, 1)
+
+        local label = new("TextLabel", {
+            Parent = section,
+            Size = UDim2.new(1, -20, 0, 24),
+            Position = UDim2.new(0, 10, 0, 8),
+            BackgroundTransparency = 1,
+            Text = title or "",
+            TextColor3 = STYLE.TextColor,
+            Font = Enum.Font.Gotham,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+
+        return section
+    end
+
+    -- Toggle creation
+    function self:AddToggle(labelText, default, callback)
+        default = default or false
+        local section = self:AddSection(labelText)
+
+        local toggleBg = new("Frame", {
+            Parent = section,
+            Size = UDim2.new(0, 56, 0, 28),
+            Position = UDim2.new(1, -66, 0, 22),
+            BackgroundColor3 = Color3.fromRGB(38, 44, 48),
+            BorderSizePixel = 0,
+        })
+        addCorner(toggleBg, UDim.new(0, 14))
+        makeStroke(toggleBg, STYLE.StrokeColor, 1)
+
+        local dot = new("Frame", {
+            Parent = toggleBg,
+            Size = UDim2.new(0, 22, 0, 22),
+            Position = UDim2.new(default and 1 or 0, default and -24 or 4, 0, 3),
+            BackgroundColor3 = Color3.fromRGB(240, 240, 240),
+            BorderSizePixel = 0,
+        })
+        addCorner(dot, UDim.new(0, 12))
+
+        local btn = new("TextButton", {
+            Parent = toggleBg,
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = "",
+        })
+
+        local state = default
+        local tweenInfo = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        btn.MouseButton1Click:Connect(function()
+            state = not state
+            if state then
+                TweenService:Create(dot, tweenInfo, {Position = UDim2.new(1, -24, 0, 3)}):Play()
+                TweenService:Create(toggleBg, tweenInfo, {BackgroundColor3 = STYLE.Accent}):Play()
+            else
+                TweenService:Create(dot, tweenInfo, {Position = UDim2.new(0, 4, 0, 3)}):Play()
+                TweenService:Create(toggleBg, tweenInfo, {BackgroundColor3 = Color3.fromRGB(38, 44, 48)}):Play()
+            end
+            if callback then
+                pcall(callback, state)
+            end
+        end)
+
+        -- initial color
+        toggleBg.BackgroundColor3 = state and STYLE.Accent or Color3.fromRGB(38, 44, 48)
+
+        return {
+            Set = function(_, v)
+                if type(v) == "boolean" then
+                    state = v
+                    dot.Position = UDim2.new(state and 1 or 0, state and -24 or 4, 0, 3)
+                    toggleBg.BackgroundColor3 = state and STYLE.Accent or Color3.fromRGB(38, 44, 48)
+                end
+            end,
+            Get = function() return state end,
+        }
+    end
+
+    -- Textbox creation
+    function self:AddTextbox(labelText, placeholder, callback)
+        placeholder = placeholder or ""
+        local section = self:AddSection(labelText)
+
+        local box = new("TextBox", {
+            Parent = section,
+            Size = UDim2.new(1, -28, 0, 36),
+            Position = UDim2.new(0, 14, 0, 22),
+            BackgroundColor3 = Color3.fromRGB(23, 28, 32),
+            BorderSizePixel = 0,
+            Text = "",
+            PlaceholderText = placeholder,
+            TextColor3 = STYLE.TextColor,
+            Font = Enum.Font.Gotham,
+            TextSize = 14,
+            ClearTextOnFocus = false,
+        })
+        addCorner(box, UDim.new(0, 10))
+        makeStroke(box, STYLE.StrokeColor, 1)
+
+        box.FocusLost:Connect(function(enterPressed)
+            if callback and enterPressed then
+                pcall(callback, box.Text)
+            end
+        end)
+
+        return box
+    end
+
+    -- Dropdown creation
+    function self:AddDropdown(labelText, options, defaultIndex, callback)
+        options = options or {}
+        defaultIndex = defaultIndex or 1
+        local section = self:AddSection(labelText)
+
+        local outer = new("Frame", {
+            Parent = section,
+            Size = UDim2.new(1, -28, 0, 40),
+            Position = UDim2.new(0, 14, 0, 22),
+            BackgroundColor3 = Color3.fromRGB(23, 28, 32),
+            BorderSizePixel = 0,
+        })
+        addCorner(outer, UDim.new(0, 10))
+        makeStroke(outer, STYLE.StrokeColor, 1)
+
+        local current = new("TextLabel", {
+            Parent = outer,
+            Size = UDim2.new(1, -36, 1, 0),
+            BackgroundTransparency = 1,
+            Text = options[defaultIndex] or "Select",
+            TextColor3 = STYLE.TextColor,
+            Font = Enum.Font.Gotham,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Position = UDim2.new(0, 10, 0, 0),
+        })
+
+        local arrow = new("TextButton", {
+            Parent = outer,
+            Size = UDim2.new(0, 28, 1, 0),
+            Position = UDim2.new(1, -28, 0, 0),
+            BackgroundTransparency = 1,
+            Text = "▾",
+            TextColor3 = STYLE.SubTextColor,
+            Font = Enum.Font.Gotham,
+            TextSize = 18,
+        })
+
+        local listContainer = new("Frame", {
+            Parent = outer,
+            Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.new(0, 1, 0, 40),
+            BackgroundColor3 = STYLE.PanelColor,
+            BorderSizePixel = 0,
+            ClipsDescendants = true,
+            Visible = false,
+        })
+        addCorner(listContainer, UDim.new(0, 10))
+        makeStroke(listContainer, STYLE.StrokeColor, 1)
+
+        local list = new("UIListLayout", {Parent = listContainer, SortOrder = Enum.SortOrder.LayoutOrder})
+        list.Padding = UDim.new(0, 6)
+
+        local isOpen = false
+        local function buildList()
+            for _, child in ipairs(listContainer:GetChildren()) do
+                if child:IsA("TextButton") then child:Destroy() end
+            end
+            for i, opt in ipairs(options) do
+                local btn = new("TextButton", {
+                    Parent = listContainer,
+                    Size = UDim2.new(1, -20, 0, 30),
+                    BackgroundTransparency = 1,
+                    Text = opt,
+                    TextColor3 = STYLE.TextColor,
+                    Font = Enum.Font.Gotham,
+                    TextSize = 14,
+                })
+                btn.LayoutOrder = i
+                btn.MouseButton1Click:Connect(function()
+                    current.Text = opt
+                    isOpen = false
+                    listContainer.Visible = false
+                    listContainer.Size = UDim2.new(1, 0, 0, 0)
+                    if callback then pcall(callback, opt, i) end
+                end)
+            end
+            -- update list container height
+            local itemCount = #options
+            local totalHeight = math.clamp(itemCount * 36 + 8, 0, 200)
+            listContainer.Size = UDim2.new(1, 0, 0, totalHeight)
+        end
+
+        buildList()
+
+        arrow.MouseButton1Click:Connect(function()
+            isOpen = not isOpen
+            listContainer.Visible = isOpen
+        end)
+
+        return {
+            SetOptions = function(_, newOptions)
+                options = newOptions or {}
+                if #options == 0 then options = {"(empty)"} end
+                buildList()
+            end,
+            GetSelection = function() return current.Text end,
+            SetSelection = function(_, text)
+                current.Text = text
+            end,
+        }
+    end
+
+    return self
+end
+
+return ChilliUI
